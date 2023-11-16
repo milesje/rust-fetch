@@ -3,25 +3,24 @@
 use std::path::Path;
 use walkdir::WalkDir;
 use my_public_ip::resolve;
-use std::path::Path;
 */ // unused crates
+use colored::{Color, Colorize};
+use directories::ProjectDirs;
+use libmacchina::GeneralReadout;
 use local_ip_address::local_ip;
-use std::str;
-use std::process::Command;
-use std::fs::File;
+use serde::Deserialize;
+use std::env;
 use std::fs;
+use std::fs::File;
 use std::io::Read;
+use std::path::Path;
+use std::process::Command;
+use std::str;
+use std::str::FromStr;
+use sys_info::{cpu_num, mem_info};
 use titlecase::titlecase;
 use uname::uname;
-use std::env;
-use libmacchina::GeneralReadout;
-use sys_info::{mem_info, cpu_num};
-use directories::ProjectDirs;
-use serde::Deserialize;
-use colored::{Colorize, Color};
-use std::str::FromStr;
 //use std::io::Write;
-
 
 #[derive(Deserialize)]
 struct Config {
@@ -39,9 +38,13 @@ pub struct ColorCodeIter<I: Iterator<Item = char>> {
 }
 
 impl<I: Iterator<Item = char>> ColorCodeIter<I> {
-    pub fn new(iter: I) -> Self
-    {
-        Self { iter, color: Color::Blue /* or something like that */, remainder: None, buffer: String::with_capacity(4) }
+    pub fn new(iter: I) -> Self {
+        Self {
+            iter,
+            color: Color::Blue, /* or something like that */
+            remainder: None,
+            buffer: String::with_capacity(4),
+        }
     }
 }
 
@@ -65,7 +68,7 @@ impl<I: Iterator<Item = char>> Iterator for ColorCodeIter<I> {
                             self.buffer.clear();
 
                             break Some((self.iter.next()?, self.color));
-                        },
+                        }
                         Some(v) => self.buffer.push(v),
                         None => (),
                     }
@@ -73,7 +76,7 @@ impl<I: Iterator<Item = char>> Iterator for ColorCodeIter<I> {
                 Some(v) => {
                     self.remainder = Some(v);
                     Some(('$', self.color))
-                },
+                }
                 None => None,
             },
             Some('\\') => Some((self.iter.next()?, self.color)),
@@ -87,7 +90,6 @@ fn main() {
     let host_name = whoami::devicename(); // hostname
     let title_length = host_name.chars().count() + user_name.chars().count() + 3; //length of hostname and username + @ symbol
     let os = whoami::distro(); // distro (and version if not rolling release)
-
 
     let kernel = uname().unwrap().release; // kernel
 
@@ -110,20 +112,18 @@ fn main() {
 
     // Checks memory info
     let mem = mem_info().unwrap();
-      let mem_used = mem.total/1024 - mem.avail/1024;
-      let mem_percent: f32  = ((mem_used as f32)/((mem.total as f32)/1024.0)*100.0) as f32;
+    let mem_used = mem.total / 1024 - mem.avail / 1024;
+    let mem_percent: f32 = ((mem_used as f32) / ((mem.total as f32) / 1024.0) * 100.0) as f32;
 
     // Checks Screen Resolution info
-    let res_info = GeneralReadout::new().resolution().unwrap();
+    //    let res_info = GeneralReadout::new().resolution().unwrap();
 
     // print outs
     // println!("{}", title_length); // prints length of title
     if let Some(proj_dirs) = ProjectDirs::from("dev", "Kara-Wilson", "rust-fetch") {
         let config_dir = proj_dirs.config_dir();
 
-        let config_file = fs::read_to_string(
-            config_dir.join("config.toml"),
-        );
+        let config_file = fs::read_to_string(config_dir.join("config.toml"));
 
         let config: Config = match config_file {
             Ok(file) => toml::from_str(&file).unwrap(),
@@ -134,165 +134,200 @@ fn main() {
                 os: "arch".to_string(),
             },
         };
-        let modules:[String;20] = [
-            format!("{} {} {}",
-                    user_name.color(config.info_color.clone()),
-                    "@".blue().bold(),
-                    host_name.color(config.info_color.clone())),
+        let modules: [String; 19] = [
+            format!(
+                "{} {} {}",
+                user_name.color(config.info_color.clone()),
+                "@".blue().bold(),
+                host_name.color(config.info_color.clone())
+            ),
             format!("{:—<1$}", "", title_length),
-
-
-
-            format!("{} {}",
-                     "OS:".color(config.info_color.clone()).bold(),
-                     os.normal()),
-
+            format!(
+                "{} {}",
+                "OS:".color(config.info_color.clone()).bold(),
+                os.normal()
+            ),
             if let Some(model) = device_model() {
                 if model != "" {
-                    format!("{} {}",
-                             "Model:".color(config.info_color.clone()).bold(),
-                             model.normal())
-                } else {
-                    format!("{} {}",
-                            "Model:".color(config.info_color.clone()).bold(),
-                            "Model not found".normal())
-                }
-            } else {
-                format!("{} {}",
+                    format!(
+                        "{} {}",
                         "Model:".color(config.info_color.clone()).bold(),
-                        "Model not found".normal())
-            },
-
-            format!("{} {}",
-                     "Kernel:".color(config.info_color.clone()).bold(),
-                     kernel.normal()),
-
-            format!("{} {}",
-                     "Uptime:".color(config.info_color.clone()).bold(),
-                     uptime_time().normal()),
-            if let Some(how_many) = packages(&config.packages) {
-
-                if how_many != "" {
-                    format!("{} {}",
-                             "Packages:".color(config.info_color.clone()).bold(),
-                             how_many.normal())
+                        model.normal()
+                    )
                 } else {
-                    format!("{} {}",
-                            "Packages:".color(config.info_color.clone()).bold(),
-                            "packages not found".normal())
+                    format!(
+                        "{} {}",
+                        "Model:".color(config.info_color.clone()).bold(),
+                        "Model not found".normal()
+                    )
                 }
             } else {
-                format!("{} {}",
-                            "Packages:".color(config.info_color.clone()).bold(),
-                            "packages not found".normal())
+                format!(
+                    "{} {}",
+                    "Model:".color(config.info_color.clone()).bold(),
+                    "Model not found".normal()
+                )
             },
-
-            if usr_shell != "" {
-                format!("{} {}",
-                         "Defualt Shell:".color(config.info_color.clone()).bold(),
-                         usr_shell.normal())
+            format!(
+                "{} {}",
+                "Kernel:".color(config.info_color.clone()).bold(),
+                kernel.normal()
+            ),
+            format!(
+                "{} {}",
+                "Uptime:".color(config.info_color.clone()).bold(),
+                uptime_time().normal()
+            ),
+            if let Some(how_many) = packages(&config.packages) {
+                if how_many != "" {
+                    format!(
+                        "{} {}",
+                        "Packages:".color(config.info_color.clone()).bold(),
+                        how_many.normal()
+                    )
+                } else {
+                    format!(
+                        "{} {}",
+                        "Packages:".color(config.info_color.clone()).bold(),
+                        "packages not found".normal()
+                    )
+                }
             } else {
-                format!("{} {}",
-                        "Default Shell:".color(config.info_color.clone()).bold(),
-                        "defualt shell not found".normal())
+                format!(
+                    "{} {}",
+                    "Packages:".color(config.info_color.clone()).bold(),
+                    "packages not found".normal()
+                )
             },
+            if usr_shell != "" {
+                format!(
+                    "{} {}",
+                    "Defualt Shell:".color(config.info_color.clone()).bold(),
+                    usr_shell.normal()
+                )
+            } else {
+                format!(
+                    "{} {}",
+                    "Default Shell:".color(config.info_color.clone()).bold(),
+                    "defualt shell not found".normal()
+                )
+            },
+            /*
             format!("{} {}",
                      "Screen Resolution:".color(config.info_color.clone()).bold(),
                      res_info.normal()),
-            format!("{} {}",
-                     "DE/WM:".color(config.info_color.clone()).bold(),
-                     wm_de().normal()),
-            format!("{} {}",
-                     "GTK Theme:".color(config.info_color.clone()).bold(),
-                     gtk_theme_find().normal()),
-            format!("{} {}",
-                     "GTK Icon Theme:".color(config.info_color.clone()).bold(),
-                     gtk_icon_find().normal()),
-            format!("{} {}",
-                     "Terminal:".color(config.info_color.clone()).bold(),
-                     terminal.normal()),
-            format!("{} {} {}{}{}",
-                     "CPU:".color(config.info_color.clone()).bold(),
-                     cpu_info.normal(),
-                     "(".normal(),
-                     cpu_usage_info(),
-                     "%)"),
-
+            */
+            format!(
+                "{} {}",
+                "DE/WM:".color(config.info_color.clone()).bold(),
+                wm_de().normal()
+            ),
+            format!(
+                "{} {}",
+                "GTK Theme:".color(config.info_color.clone()).bold(),
+                gtk_theme_find().normal()
+            ),
+            format!(
+                "{} {}",
+                "GTK Icon Theme:".color(config.info_color.clone()).bold(),
+                gtk_icon_find().normal()
+            ),
+            format!(
+                "{} {}",
+                "Terminal:".color(config.info_color.clone()).bold(),
+                terminal.normal()
+            ),
+            format!(
+                "{} {} {}{}{}",
+                "CPU:".color(config.info_color.clone()).bold(),
+                cpu_info.normal(),
+                "(".normal(),
+                cpu_usage_info(),
+                "%)"
+            ),
             if gpu_find().contains(", ") {
-                format!("{} {}",
-                         "GPUs:".color(config.info_color.clone()).bold(),
-                         gpu_find().normal())
+                format!(
+                    "{} {}",
+                    "GPUs:".color(config.info_color.clone()).bold(),
+                    gpu_find().normal()
+                )
             } else {
-                format!("{} {}",
-                         "GPU: {}".color(config.info_color.clone()).bold(),
-                         gpu_find().normal())
+                format!(
+                    "{} {}",
+                    "GPU:".color(config.info_color.clone()).bold(),
+                    gpu_find().normal()
+                )
             },
-
-            format!("{} {}{}{}{}{:.2}{}",
-                     "Memory:".color(config.info_color.clone()).bold(),
-                     mem_used.to_string().normal(),
-                     "Mib / ",
-                     mem.total/1024,
-                     "Mib (",
-                     mem_percent,
-                     "%)"),
+            format!(
+                "{} {}{}{}{}{:.2}{}",
+                "Memory:".color(config.info_color.clone()).bold(),
+                mem_used.to_string().normal(),
+                "Mib / ",
+                mem.total / 1024,
+                "Mib (",
+                mem_percent,
+                "%)"
+            ),
             if let Some((per, state)) = battery_percentage() {
                 if per != "" && state != "" {
-                    format!("{} {} {}{}{}",
-                             "Battery:".color(config.info_color.clone()).bold(),
-                             per.normal(),
-                             "[",
-                             state,
-                             "]")
+                    format!(
+                        "{} {} {}{}{}",
+                        "Battery:".color(config.info_color.clone()).bold(),
+                        per.normal(),
+                        "[",
+                        state,
+                        "]"
+                    )
                 } else if per != "" {
-                    format!("{} {}",
-                             "Battery:".color(config.info_color.clone()).bold(),
-                             per.normal())
+                    format!(
+                        "{} {}",
+                        "Battery:".color(config.info_color.clone()).bold(),
+                        per.normal()
+                    )
                 } else {
-                    format!("{} {}",
-                            "Battery:".color(config.info_color.clone()).bold(),
-                            "battery info not found".normal())
+                    format!(
+                        "{} {}",
+                        "Battery:".color(config.info_color.clone()).bold(),
+                        "battery info not found".normal()
+                    )
                 }
             } else {
-               format!("{} {}",
-                       "Battery:".color(config.info_color.clone()).bold(),
-                        "battery info not found".normal())
+                format!(
+                    "{} {}",
+                    "Battery:".color(config.info_color.clone()).bold(),
+                    "battery info not found".normal()
+                )
             },
-
             if let Some(users) = user_list() {
                 if users != "" {
-                    format!("{} {}",
-                             "Users:".color(config.info_color.clone()).bold(),
-                             users.normal())
+                    format!(
+                        "{} {}",
+                        "Users:".color(config.info_color.clone()).bold(),
+                        users.normal()
+                    )
                 } else {
-                    format!("{} {}",
-                            "Users:".color(config.info_color.clone()).bold(),
-                            "users not found".normal())
+                    format!(
+                        "{} {}",
+                        "Users:".color(config.info_color.clone()).bold(),
+                        "users not found".normal()
+                    )
                 }
             } else {
-                format!("{} {}",
-                        "Users:".color(config.info_color.clone()).bold(),
-                        "users not found".normal())
+                format!(
+                    "{} {}",
+                    "Users:".color(config.info_color.clone()).bold(),
+                    "users not found".normal()
+                )
             },
-
-            format!("{} {} {}",
-                    "IP:".color(config.info_color.clone()).bold(),
-                    local_ip.normal(),
-                    "[Local]".normal()),
-
-            format!("")
-
+            format!(
+                "{} {} {}",
+                "IP:".color(config.info_color.clone()).bold(),
+                local_ip.normal(),
+                "[Local]".normal()
+            ),
+            format!(""),
         ];
-        let ascii = "/home/".to_owned() + &whoami::username() + "/.config/rust-fetch/ascii_art/" + &config.os;
-        // println!("{}", home);
-        //let ascii = Path::new("/home/kara/.config/rust-fetch/ascii_art/arch");
-        //let file = File::open(ascii).expect("File not found or cannot be opened");
-        //let content = BufReader::new(&file);
-        /* for (x, line) in modules.into_iter().zip(lines) {
-            println!("{}{}",
-                     line.expect("failed to fetch ASCII art").color(config.logo_color.clone()).bold(),
-                     x);
-        } */
+        let ascii = config_dir.join("ascii_art/").join(&config.os);
         let buf = std::fs::read_to_string(ascii).unwrap();
         let mut i = 0;
         for (character, color) in ColorCodeIter::new(buf.chars()) {
@@ -300,21 +335,19 @@ fn main() {
                 print!("{}", character.to_string().color(color));
             } else {
                 println!("{} ", modules[i]);
-                i+=1;
-                //print!("{}", character.to_string().color(color));
+                i += 1;
             }
-                     //std::io::stdout().flush();
         }
     }
 }
 
 pub fn uptime_time() -> String {
     let mut output = String::new();
-    let mut uptime_f = File::open("/proc/uptime")
-        .expect("Unable to open the file");
+    let mut uptime_f = File::open("/proc/uptime").expect("Unable to open the file");
     let mut uptime = String::new();
-    uptime_f.read_to_string(&mut uptime)
-            .expect("Unable to open the file");
+    uptime_f
+        .read_to_string(&mut uptime)
+        .expect("Unable to open the file");
     let uptime: f32 = uptime.split(' ').collect::<Vec<&str>>()[0].parse().unwrap();
 
     let hour = uptime.round() as u32 / 3600;
@@ -345,9 +378,7 @@ pub fn gpu_find() -> String {
     let mut gpus = Command::new("sh");
     gpus.arg("-c");
     gpus.arg("lspci | grep -i 'vga\\|3d\\|2d' | cut -d ':' -f3 | cut -d '[' -f2 | cut -d ']' -f1");
-    let gpu_out  = gpus.output()
-        .expect("failed to execute process")
-        .stdout;
+    let gpu_out = gpus.output().expect("failed to execute process").stdout;
     let gpu_out = match str::from_utf8(&gpu_out) {
         Ok(v) => v,
         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
@@ -368,9 +399,10 @@ pub fn gtk_theme_find() -> String {
     let mut gtk_theme = Command::new("sh");
     gtk_theme.arg("-c");
     gtk_theme.arg(gtk_cmd);
-    let gtk = gtk_theme.output()
-                       .expect("failed to execute process")
-                       .stdout;
+    let gtk = gtk_theme
+        .output()
+        .expect("failed to execute process")
+        .stdout;
     let gtk = match str::from_utf8(&gtk) {
         Ok(v) => v,
         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
@@ -380,13 +412,15 @@ pub fn gtk_theme_find() -> String {
 }
 
 pub fn gtk_icon_find() -> String {
-    let gtk_cmd = "cat $HOME/.config/gtk-3.0/settings.ini | grep gtk-icon-theme-name | cut -d '=' -f2";
+    let gtk_cmd =
+        "cat $HOME/.config/gtk-3.0/settings.ini | grep gtk-icon-theme-name | cut -d '=' -f2";
     let mut gtk_icon_theme = Command::new("sh");
     gtk_icon_theme.arg("-c");
     gtk_icon_theme.arg(gtk_cmd);
-    let gtk_icon = gtk_icon_theme.output()
-                                 .expect("failed to execute process")
-                                 .stdout;
+    let gtk_icon = gtk_icon_theme
+        .output()
+        .expect("failed to execute process")
+        .stdout;
     let gtk_icon = match str::from_utf8(&gtk_icon) {
         Ok(v) => v,
         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
@@ -413,7 +447,6 @@ pub fn cpu_usage_info() -> f32 {
     // let cpu_use = &cpu_use.replace("\n", "");
     let cpu_avg = (cpu_use / cores as f32).round();
 
-
     cpu_avg
 }
 pub fn battery_percentage() -> Option<(String, String)> {
@@ -429,7 +462,7 @@ pub fn battery_percentage() -> Option<(String, String)> {
         //.replace("%", "")
         //.parse::<i8>()
         .to_string();
-        //.expect("battery output not a string");
+    //.expect("battery output not a string");
 
     let state = Command::new("sh")
         .arg("-c")
@@ -442,7 +475,6 @@ pub fn battery_percentage() -> Option<(String, String)> {
         .expect("battery status not utf-8")
         .trim()
         .to_string();
-
 
     return Some((battery_per, battery_state));
 }
@@ -462,116 +494,151 @@ pub fn user_list() -> Option<String> {
 }
 
 fn device_model() -> Option<String> {
-    let mut product_name = File::open("/sys/devices/virtual/dmi/id/product_name")
-        .expect("Unable to open the file");
+    let mut product_name =
+        File::open("/sys/devices/virtual/dmi/id/product_name").expect("Unable to open the file");
 
-    let mut product_version = File::open("/sys/devices/virtual/dmi/id/product_version")
-        .expect("Unable to open the file");
+    let mut product_version =
+        File::open("/sys/devices/virtual/dmi/id/product_version").expect("Unable to open the file");
 
     let mut model = String::new();
-    product_name.read_to_string(&mut model)
+    product_name
+        .read_to_string(&mut model)
         .expect("Unable to read the file"); // gets product name
-    let _ = product_version.read_to_string(&mut model)
+    let _ = product_version
+        .read_to_string(&mut model)
         .expect("Unable to read the file"); // get number revision
     let model = model.replace("\n", " ");
     return Some(model);
 }
+
+fn get_cargo_app_count() -> usize {
+    let mut count: usize = 0;
+    let dir: String = "/home/".to_owned() + &whoami::username() + "/.cargo/bin";
+    if Path::new(&dir).exists() {
+        count = fs::read_dir(dir).unwrap().count();
+    }
+    count
+}
+
+fn get_flatpak_app_count() -> usize {
+    let mut count: usize = 0;
+    let dir: String = "/var/lib/flatpak/app".to_string();
+    if Path::new(&dir).exists() {
+        count = fs::read_dir(dir).unwrap().count();
+    }
+    count
+}
+
+fn get_pacman_count() -> usize {
+    let mut count: usize = 0;
+    let pacman = Command::new("sh")
+        .arg("-c")
+        .arg("pacman -Q | wc -l")
+        .output()
+        .expect("failed to execute process")
+        .stdout;
+    let pacman_out = str::from_utf8(&pacman)
+        .expect("pacman output not utf-8")
+        .trim();
+    if pacman_out != "" {
+        count = pacman_out.parse::<usize>().unwrap();
+    }
+    count
+}
+
+fn get_apt_count() -> usize {
+    let mut count: usize = 0;
+    let apt = Command::new("sh")
+        .arg("-c")
+        .arg("dpkg -l | wc -l")
+        .output()
+        .expect("failed to execute process")
+        .stdout;
+    let apt_out = str::from_utf8(&apt).expect("apt output not uft-8").trim();
+    if apt_out != "" {
+        count = apt_out.parse::<usize>().unwrap();
+    }
+    count
+}
+
 fn packages(which: &str) -> Option<String> {
     let mut how_many = String::new();
     if which == "package-managers" {
-    // Do packages fully later
-    // Package managers
-    /* Todo List: // append all that exist to string and print string
-    [X] pacman
-    [X] apt
-    [X] pip
-    [X] cargo
-    [X] flatpak
-    [ ] appimages
-     */
+        // Do packages fully later
+        // Package managers
+        /* Todo List: // append all that exist to string and print string
+        [X] pacman
+        [X] apt
+        [X] pip
+        [X] cargo
+        [X] flatpak
+        [ ] appimages
+         */
         // check if pacman exists
-        let pac_e = std::path::Path::new("/bin/pacman").exists() | std::path::Path::new("/usr/bin/pacman").exists();
+        let pac_e = std::path::Path::new("/bin/pacman").exists()
+            | std::path::Path::new("/usr/bin/pacman").exists();
         // check if apt exists
-        let apt_e = std::path::Path::new("/bin/apt").exists() | std::path::Path::new("/usr/bin/apt").exists();
-        // check if pip exists
-        // let pip_e = std::path::Path::new("/bin/pip").exists() | std::path::Path::new("/usr/bin/pip").exists();
+        let apt_e = std::path::Path::new("/bin/apt").exists()
+            | std::path::Path::new("/usr/bin/apt").exists();
         // check if cargo exists
-        let cargo_e = std::path::Path::new("/bin/cargo").exists() | std::path::Path::new("/usr/bin/cargo").exists();
+        let cargo_e = std::path::Path::new("/bin/cargo").exists()
+            | std::path::Path::new("/usr/bin/cargo").exists();
         // check if flatpak exists
-        let flatpak_e = std::path::Path::new("/bin/flatpak").exists() | std::path::Path::new("/usr/bin/flatpak").exists();
+        let flatpak_e: bool = std::path::Path::new("/bin/flatpak").exists()
+            | std::path::Path::new("/usr/bin/flatpak").exists();
 
+        let mut add_comma: bool = false;
         // checks how many files cargo has
         if cargo_e == true {
-            let cargo_dir: String = "/home/".to_owned() + &whoami::username() + "/.cargo/bin";
-            let cargo = fs::read_dir(cargo_dir).unwrap().count();
-            how_many += "Cargo (";
-            how_many += cargo.to_string().as_str();
-            how_many += ")";
-        }
-        if pac_e == true {
-            let pacman = Command::new("sh")
-                .arg("-c")
-                .arg("pacman -Q | wc -l")
-                .output()
-                .expect("failed to execute process")
-                .stdout;
-            let pacman_out = str::from_utf8(&pacman)
-                .expect("pacman output not utf-8")
-                .trim();
-            if pacman_out != ""  {
-                how_many += ", Pacman (";
-                how_many += pacman_out;
+            let count = get_cargo_app_count();
+            if count > 0 {
+                how_many += "Cargo (";
+                how_many += count.to_string().as_str();
                 how_many += ")";
+                add_comma = true;
+            }
+        }
+
+        if pac_e == true {
+            let count: usize = get_pacman_count();
+
+            if count > 0 {
+                if add_comma == true {
+                    how_many += ", "
+                }
+                how_many += "Pacman (";
+                how_many += count.to_string().as_str();
+                how_many += ")";
+                add_comma = true;
             }
         }
         if apt_e == true {
-            let apt = Command::new("sh")
-                .arg("-c")
-                .arg("dpkg -l | wc -l")
-                .output()
-                .expect("failed to execute process")
-                .stdout;
-            let apt_out = str::from_utf8(&apt)
-                .expect("apt output not uft-8")
-                .trim();
-            if apt_out != "" {
-                how_many += ", APT (";
-                how_many += apt_out;
+            let count: usize = get_apt_count();
+            if count > 0 {
+                if add_comma == true {
+                    how_many += ", "
+                }
+                how_many += "APT (";
+                how_many += count.to_string().as_str();
                 how_many += ")";
+                add_comma = true;
             }
         }
-        /* if pip_e == true {
-            let pip = Command::new("sh")
-                .arg("-c")
-                .arg("pip list | wc -l")
-                .output()
-                .expect("failed  to execute process")
-                .stdout;
-            let mut pip_out = str::from_utf8(&pip)
-                .expect("pip status not utf-8")
-                .trim()
-                .parse::<i8>()
-                .expect("pip output not uft-8");
-            pip_out -= 2;
-            if pip_out != 0 {
-                how_many += ", pip (";
-                how_many += pip_out.to_string().as_str();
+        if flatpak_e == true {
+            let count: usize = get_flatpak_app_count();
+            if count > 0 {
+                if add_comma == true{
+                    how_many += ", "
+                }
+                how_many += "Flatpak (";
+                how_many += count.to_string().as_str();
                 how_many += ")";
-            }
-        }*/
-
-        if flatpak_e == true { // I think i used the wrong flatpak directories. should investagate when on wifi
-            let flatpak_dir_system: String = "/var/lib/flatpak/app".to_string();
-            let flatpak = fs::read_dir(flatpak_dir_system).unwrap().count();
-            if flatpak.to_string() != "" {
-                how_many += ", Flatpak (";
-                how_many += flatpak.to_string().as_str();
-                how_many += ")";
+                // if other app checks occur after this we need to set this value
+                // as we don't currenlty hae any after it throws a warning
+                // add_comma = true; 
             }
         }
-
     } else if which == "path" {
-
         // Checks packages in all directories in $PATH
         let path = env::var("PATH").expect("$PATH is not set");
         let data = path.split(':');
@@ -601,15 +668,17 @@ fn packages(which: &str) -> Option<String> {
 pub fn wm_de() -> String {
     use libmacchina::traits::GeneralReadout as _;
     let general_readout = GeneralReadout::new();
-    let resolution = general_readout.desktop_environment().expect("Failed to get desktop environment");
+    let resolution = general_readout
+        .desktop_environment()
+        .expect("Failed to get desktop environment");
     resolution
 }
 
 pub fn ip() -> String {
-   let my_local_ip = local_ip().unwrap().to_string();
-   //let my_public_ip = my_public_ip::resolve().unwrap().to_string();
+    let my_local_ip = local_ip().unwrap().to_string();
+    //let my_public_ip = my_public_ip::resolve().unwrap().to_string();
 
-   return my_local_ip;
+    return my_local_ip;
 }
 
 /* Todo:
