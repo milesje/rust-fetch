@@ -7,13 +7,13 @@ use my_public_ip::resolve;
 use colored::{Color, Colorize};
 use directories::ProjectDirs;
 use libmacchina::GeneralReadout;
+use libmacchina::PackageReadout;
 use local_ip_address::local_ip;
 use serde::Deserialize;
 use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
 use std::process::Command;
 use std::str;
 use std::str::FromStr;
@@ -24,7 +24,7 @@ use uname::uname;
 
 #[derive(Deserialize)]
 struct Config {
-    packages: String,
+    // packages: String,
     info_color: String,
     //logo_color: String,
     os: String,
@@ -128,7 +128,7 @@ fn main() {
         let config: Config = match config_file {
             Ok(file) => toml::from_str(&file).unwrap(),
             Err(_) => Config {
-                packages: "path".to_string(),
+                // packages: "path".to_string(),
                 info_color: "blue".to_string(),
                 //logo_color: "magenta".to_string(),
                 os: "arch".to_string(),
@@ -178,7 +178,7 @@ fn main() {
                 "Uptime:".color(config.info_color.clone()).bold(),
                 uptime_time().normal()
             ),
-            if let Some(how_many) = packages(&config.packages) {
+            if let Some(how_many) = packages() {
                 if how_many != "" {
                     format!(
                         "{} {}",
@@ -511,156 +511,17 @@ fn device_model() -> Option<String> {
     return Some(model);
 }
 
-fn get_cargo_app_count() -> usize {
-    let mut count: usize = 0;
-    let dir: String = "/home/".to_owned() + &whoami::username() + "/.cargo/bin";
-    if Path::new(&dir).exists() {
-        count = fs::read_dir(dir).unwrap().count();
-    }
-    count
-}
-
-fn get_flatpak_app_count() -> usize {
-    let mut count: usize = 0;
-    let dir: String = "/var/lib/flatpak/app".to_string();
-    if Path::new(&dir).exists() {
-        count = fs::read_dir(dir).unwrap().count();
-    }
-    count
-}
-
-fn get_pacman_count() -> usize {
-    let mut count: usize = 0;
-    let pacman = Command::new("sh")
-        .arg("-c")
-        .arg("pacman -Q | wc -l")
-        .output()
-        .expect("failed to execute process")
-        .stdout;
-    let pacman_out = str::from_utf8(&pacman)
-        .expect("pacman output not utf-8")
-        .trim();
-    if pacman_out != "" {
-        count = pacman_out.parse::<usize>().unwrap();
-    }
-    count
-}
-
-fn get_apt_count() -> usize {
-    let mut count: usize = 0;
-    let apt = Command::new("sh")
-        .arg("-c")
-        .arg("dpkg -l | wc -l")
-        .output()
-        .expect("failed to execute process")
-        .stdout;
-    let apt_out = str::from_utf8(&apt).expect("apt output not uft-8").trim();
-    if apt_out != "" {
-        count = apt_out.parse::<usize>().unwrap();
-    }
-    count
-}
-
-fn packages(which: &str) -> Option<String> {
+fn packages() -> Option<String> {
     let mut how_many = String::new();
-    if which == "package-managers" {
-        // Do packages fully later
-        // Package managers
-        /* Todo List: // append all that exist to string and print string
-        [X] pacman
-        [X] apt
-        [X] pip
-        [X] cargo
-        [X] flatpak
-        [ ] appimages
-         */
-        // check if pacman exists
-        let pac_e = std::path::Path::new("/bin/pacman").exists()
-            | std::path::Path::new("/usr/bin/pacman").exists();
-        // check if apt exists
-        let apt_e = std::path::Path::new("/bin/apt").exists()
-            | std::path::Path::new("/usr/bin/apt").exists();
-        // check if cargo exists
-        let cargo_e = std::path::Path::new("/bin/cargo").exists()
-            | std::path::Path::new("/usr/bin/cargo").exists();
-        // check if flatpak exists
-        let flatpak_e: bool = std::path::Path::new("/bin/flatpak").exists()
-            | std::path::Path::new("/usr/bin/flatpak").exists();
-
-        let mut add_comma: bool = false;
-        // checks how many files cargo has
-        if cargo_e == true {
-            let count = get_cargo_app_count();
-            if count > 0 {
-                how_many += "Cargo (";
-                how_many += count.to_string().as_str();
-                how_many += ")";
-                add_comma = true;
-            }
-        }
-
-        if pac_e == true {
-            let count: usize = get_pacman_count();
-
-            if count > 0 {
-                if add_comma == true {
-                    how_many += ", "
-                }
-                how_many += "Pacman (";
-                how_many += count.to_string().as_str();
-                how_many += ")";
-                add_comma = true;
-            }
-        }
-        if apt_e == true {
-            let count: usize = get_apt_count();
-            if count > 0 {
-                if add_comma == true {
-                    how_many += ", "
-                }
-                how_many += "APT (";
-                how_many += count.to_string().as_str();
-                how_many += ")";
-                add_comma = true;
-            }
-        }
-        if flatpak_e == true {
-            let count: usize = get_flatpak_app_count();
-            if count > 0 {
-                if add_comma == true{
-                    how_many += ", "
-                }
-                how_many += "Flatpak (";
-                how_many += count.to_string().as_str();
-                how_many += ")";
-                // if other app checks occur after this we need to set this value
-                // as we don't currenlty hae any after it throws a warning
-                // add_comma = true; 
-            }
-        }
-    } else if which == "path" {
-        // Checks packages in all directories in $PATH
-        let path = env::var("PATH").expect("$PATH is not set");
-        let data = path.split(':');
-        how_many = "".to_string();
-        let home_dir = "/home/".to_owned() + &whoami::username();
-        for s in data {
-            // println!("PATH: {}", s);
-            if s != "" && std::path::Path::new(s).exists() == true {
-                if fs::read_dir(s).unwrap().count().to_string().as_str() != "0" {
-                    if s.contains(&home_dir) {
-                        how_many.push_str(s.replace(&home_dir, "~").to_string().as_str());
-                    } else {
-                        how_many.push_str(s);
-                    }
-                    how_many.push_str(" (");
-                    how_many.push_str(fs::read_dir(s).unwrap().count().to_string().as_str());
-                    how_many.push_str("), ");
-                    // println!("Packages: {:?}", how_many);
-                }
-            }
-        }
-        how_many = (&how_many[0..how_many.len() - 2]).to_string();
+    use libmacchina::traits::PackageReadout as _;
+    let readout = PackageReadout::new();
+    let count = readout.count_pkgs();
+    for n in count {
+        let (pm, count) = n;
+        how_many += pm.to_string().as_str();
+        how_many += " (";
+        how_many += count.to_string().as_str();
+        how_many +=") ";
     }
     Some(how_many.to_string())
 }
